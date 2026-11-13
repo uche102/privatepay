@@ -10,3 +10,16 @@ button { border: 0; border-radius: 999px; padding: 13px 18px; color: white; back
 .session { display: grid; gap: 12px; margin-top: 28px; }
 .session p { margin: 0; font-weight: 700; }
 code { overflow-wrap: anywhere; padding: 12px; border-radius: 10px; background: #eef4ef; }
+hr { width: 100%; border: 0; border-top: 1px solid #d5e2d7; margin: 16px 0; }
+h2 { margin: 8px 0; font-size: 22px; }
+.form, label { display: grid; gap: 7px; }
+.form { gap: 14px; }
+label { font-size: 13px; font-weight: 700; }
+input { width: 100%; border: 1px solid #cbd9ce; border-radius: 10px; padding: 12px; font: inherit; }
+.invoice { display: grid; gap: 10px; margin-top: 18px; padding: 18px; border-radius: 16px; background: #f1f8f2; }
+.invoice strong { font-size: 30px; }
+.badge, .paid, .pending { color: #247143; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.history { display: grid; gap: 10px; margin-top: 24px; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #e1ebe3; }
+.row span:first-child { display: grid; gap: 4px; }
+small { color: #617067; }
