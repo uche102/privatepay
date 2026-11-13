@@ -13,6 +13,10 @@ database.exec(`CREATE TABLE IF NOT EXISTS invoices (id TEXT PRIMARY KEY, amountN
 app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173' }));
 app.use(express.json());
 
+app.get('/api/health', (_request, response) => {
+  response.json({ ok: true, service: 'privatepay-api', testnetOnly: true });
+});
+
 app.post('/api/invoices', (request, response) => {
   const { amountNgn, description, freelancerZcashAddress } = request.body as Record<string, unknown>;
   if (typeof amountNgn !== 'number' || amountNgn <= 0 || typeof description !== 'string' || !description.trim() || typeof freelancerZcashAddress !== 'string' || !freelancerZcashAddress.trim()) {
