@@ -1,7 +1,8 @@
 import { usePollar } from '@pollar/react';
 import { useState, type FormEvent } from 'react';
 
-type Invoice = { id: string; amount: string; description: string; recipient: string; status: 'pending' | 'paid'; };
+type Invoice = { id: string; amount: string; description: string; recipient: string; zcashAddress: string; status: 'pending' | 'paid'; };
+const demoZcashAddress = 'utest152yu6ln3kfhf204k6u6gr42307tq05gekuyvxuzy275zf37z43ruuvx58hvy6lfrcxkh4cz7njx5lfauqvndns0f82p5axtd2epau9dkue5fwx94nx0emyyky3eelztlzc3e2f0gfzhgggxrp2j0xyuu2ffpj6ep6wz9f0hzrgsxkezt';
 
 const storageKey = 'privatepay-invoices';
 
@@ -21,7 +22,7 @@ export default function App() {
   function createInvoice(event: FormEvent) {
     event.preventDefault();
     if (!amount || Number(amount) <= 0 || !description.trim()) return;
-    const invoice: Invoice = { id: crypto.randomUUID().slice(0, 8), amount, description: description.trim(), recipient: wallet?.address ?? 'testnet-wallet', status: 'pending' };
+    const invoice: Invoice = { id: crypto.randomUUID().slice(0, 8), amount, description: description.trim(), recipient: wallet?.address ?? 'testnet-wallet', zcashAddress: demoZcashAddress, status: 'pending' };
     const next = [invoice, ...invoices];
     setInvoices(next); setCreated(invoice); setAmount(''); setDescription('');
     localStorage.setItem(storageKey, JSON.stringify(next));
@@ -42,9 +43,9 @@ export default function App() {
             <h1>{publicInvoice.description}</h1>
             <p className="muted">Pay this invoice securely on Pollar testnet.</p>
             <strong className="amount">₦{Number(publicInvoice.amount).toLocaleString()}</strong>
-            <p className="muted">Recipient wallet</p>
+            <p className="muted">Pollar settlement wallet</p>
             <code>{publicInvoice.recipient}</code>
-            {publicInvoice.status === 'pending' ? <button onClick={() => markPaid(publicInvoice)}>Pay with Pollar testnet</button> : <p className="paid-message">✓ Payment confirmed</p>}
+            {publicInvoice.status === 'pending' ? <button onClick={() => markPaid(publicInvoice)}>Pay with Pollar testnet</button> : <><p className="paid-message">✓ Pollar payment confirmed</p><div className="payout"><span className="badge">ZCASH PAYOUT PENDING</span><p>Send <strong>0.001 ZEC</strong> on Zcash testnet to:</p><code>{publicInvoice.zcashAddress ?? demoZcashAddress}</code><p className="muted">The sender approves this payout in Noir Wallet.</p></div></>}
           </> : <><h1>Invoice not found</h1><p className="muted">This invoice link may have expired or is unavailable in this browser.</p></>}
         </section>
       </main>

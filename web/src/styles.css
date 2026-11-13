@@ -22,6 +22,8 @@ input { width: 100%; border: 1px solid #cbd9ce; border-radius: 10px; padding: 12
 .public-invoice { display: grid; gap: 12px; }
 .public-invoice h1 { margin: 4px 0; }
 .paid-message { color: #247143; font-weight: 800; }
+.payout { display: grid; gap: 9px; margin-top: 10px; padding: 16px; border: 1px solid #c8dfce; border-radius: 14px; background: #f5fbf6; }
+.payout p { margin: 0; }
 .badge, .paid, .pending { color: #247143; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
 .history { display: grid; gap: 10px; margin-top: 24px; }
 .row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #e1ebe3; }
