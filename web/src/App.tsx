@@ -30,7 +30,11 @@ function isShieldedAddress(value: string): boolean {
 }
 
 function getInvoiceZecAmount(invoice: Invoice): string {
-  const amount = invoice.amountNgn / invoice.exchangeRateNgnPerZec;
+  return formatZecAmount(invoice.amountNgn, invoice.exchangeRateNgnPerZec);
+}
+
+function formatZecAmount(amountNgn: number, exchangeRateNgnPerZec: number): string {
+  const amount = amountNgn / exchangeRateNgnPerZec;
   return Number.isFinite(amount) ? amount.toFixed(8).replace(/\.?0+$/, '') : '0';
 }
 
@@ -38,7 +42,7 @@ export default function App() {
   const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('1600');
+  const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('500000');
   const [platformFeePercent, setPlatformFeePercent] = useState('0.00015');
   const [freelancerZcashAddress, setFreelancerZcashAddress] = useState('');
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
@@ -359,7 +363,8 @@ export default function App() {
               </label>
               <label>
                 Conversion rate (NGN per ZEC)
-                <input type="number" min="1" step="0.01" value={exchangeRateNgnPerZec} onChange={(event) => setExchangeRateNgnPerZec(event.target.value)} placeholder="1600" required />
+                <input type="number" min="1" step="0.01" value={exchangeRateNgnPerZec} onChange={(event) => setExchangeRateNgnPerZec(event.target.value)} placeholder="500000" required />
+                <small>ZEC due = NGN amount divided by this rate.</small>
               </label>
               <label>
                 Platform fee (%)
@@ -370,6 +375,9 @@ export default function App() {
                 <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required />
               </label>
               <div className="invoice-summary">
+                {Number(amount) > 0 && Number(exchangeRateNgnPerZec) > 0 && (
+                  <p className="muted">Client pays: <strong>{formatZecAmount(Number(amount), Number(exchangeRateNgnPerZec))} ZEC</strong></p>
+                )}
                 <p className="muted">Estimated freelancer payout: <strong>₦{displayFreelancerPayout.toLocaleString()}</strong></p>
               </div>
               <button type="submit" disabled={isSubmitting} className={isSubmitting ? 'is-loading' : ''}>
