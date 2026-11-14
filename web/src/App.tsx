@@ -39,7 +39,15 @@ function formatZecAmount(amountNgn: number, exchangeRateNgnPerZec: number): stri
 }
 
 export default function App() {
-  const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
+  const {
+    isAuthenticated,
+    wallet,
+    openLoginModal,
+    logout,
+    getClient,
+    openWalletBalanceModal,
+    openTxHistoryModal,
+  } = usePollar();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('500000');
@@ -55,6 +63,25 @@ export default function App() {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const invoiceId = new URLSearchParams(window.location.search).get('invoice');
+  const pollarProfile = getClient().getUserProfile();
+  const pollarEmail = pollarProfile?.mail ?? '';
+  const pollarWalletAddress = wallet?.address ?? '';
+
+  // Keep each freelancer's Zcash receiving address with their Pollar wallet
+  // identity, so switching Pollar accounts on this browser restores the right
+  // address instead of reusing whichever address was entered last.
+  useEffect(() => {
+    if (!pollarWalletAddress) {
+      setFreelancerZcashAddress('');
+      return;
+    }
+
+    try {
+      setFreelancerZcashAddress(localStorage.getItem(`privatepay:zcash-address:${pollarWalletAddress}`) ?? '');
+    } catch {
+      setFreelancerZcashAddress('');
+    }
+  }, [pollarWalletAddress]);
 
   useEffect(() => {
     if (!invoiceId) {
@@ -333,29 +360,45 @@ export default function App() {
 
         {isAuthenticated ? (
           <div className="session">
-            <p>Logged in wallet</p>
-            <code>{wallet?.address ?? 'Wallet address pending'}</code>
+            <div className="pollar-identity">
+              <span className="pollar-identity-mark" aria-hidden="true">P</span>
+              <div>
+                <strong>Connected with Pollar</strong>
+                <p>{pollarEmail || 'Pollar account connected'}</p>
+              </div>
+            </div>
+            <label className="identity-wallet-label">
+              Pollar wallet address
+              <code>{pollarWalletAddress || 'Wallet address pending'}</code>
+            </label>
+            <div className="pollar-wallet-actions">
+              <button type="button" className="pollar-secondary-button" onClick={openWalletBalanceModal}>View Pollar assets</button>
+              <button type="button" className="pollar-secondary-button" onClick={openTxHistoryModal}>Pollar activity</button>
+            </div>
+            <small>Pollar assets stay in your Pollar wallet. Invoice payments are sent separately in ZEC to the shielded address below.</small>
             <button type="button" className="ghost-button" onClick={() => void logout()}>Log out</button>
             <hr />
             <h2>Create an invoice</h2>
             <form onSubmit={createInvoice} className="form">
               <label>
-                Your Pollar wallet address
-                <input
-                  value={wallet?.address ?? ''}
-                  placeholder="Wallet address"
-                  readOnly
-                />
-                <small>Assigned to the email account currently signed in.</small>
-              </label>
-              <label>
                 Zcash shielded receiving address
                 <input
                   value={freelancerZcashAddress}
-                  onChange={(event) => setFreelancerZcashAddress(event.target.value)}
+                  onChange={(event) => {
+                    const address = event.target.value;
+                    setFreelancerZcashAddress(address);
+                    if (pollarWalletAddress) {
+                      try {
+                        localStorage.setItem(`privatepay:zcash-address:${pollarWalletAddress}`, address);
+                      } catch {
+                        // The address remains usable for this session if browser storage is unavailable.
+                      }
+                    }
+                  }}
                   placeholder="u... or z..."
                   required
                 />
+                <small>Saved in this browser for the connected Pollar account.</small>
               </label>
               <label>
                 Amount (NGN)
