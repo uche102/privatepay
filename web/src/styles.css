@@ -11,6 +11,13 @@ button, input { font: inherit; }
 .dashboard-card { min-height: min(800px, calc(100vh - 68px)); }
 .public-shell { display: grid; place-items: center; }
 .public-invoice { width: min(100%, 560px); }
+.public-invoice .request-note,
+.public-invoice code,
+.public-invoice .request-note {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.public-invoice button { width: 100%; }
 .topbar, .brand { display: flex; align-items: center; gap: 10px; }
 .topbar { justify-content: space-between; margin-bottom: 64px; }
 .brand { font-weight: 700; letter-spacing: .06em; }
