@@ -9,6 +9,7 @@ button, input { font: inherit; }
 .card { position: relative; z-index: 1; width: min(100%, 660px); margin: 0 auto; padding: 38px; border: 1px solid #ffffff2b; border-radius: 28px; background: #300582d9; box-shadow: 0 28px 90px #10002e88; backdrop-filter: blur(14px); }
 .dashboard-shell { display: grid; align-items: center; }
 .dashboard-card { min-height: min(800px, calc(100vh - 68px)); }
+.dashboard-card, .session, .form, .form > * { min-width: 0; }
 .public-shell { display: grid; place-items: center; }
 .public-invoice { width: min(100%, 560px); }
 .public-invoice .request-note,
@@ -52,6 +53,7 @@ hr { width: 100%; border: 0; border-top: 1px solid #ffffff26; margin: 22px 0; }
 h2 { margin: 8px 0; font-size: 22px; }
 .form, label { display: grid; gap: 7px; }
 .form { gap: 14px; }
+.form > button { width: 100%; }
 label { color: #dbcbed; font-size: 13px; font-weight: 700; }
 input { width: 100%; border: 1px solid #ffffff26; border-radius: 12px; padding: 13px; color: #fff; background: #18004480; outline: none; }
 input:focus { border-color: #ffc52e; }
