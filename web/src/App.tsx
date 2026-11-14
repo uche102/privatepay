@@ -80,6 +80,7 @@ export default function App() {
   const estimatedFreelancerPayout = Number(amount || 0) > 0 && Number(platformFeePercent || 0) >= 0
     ? Number((Number(amount) * (1 - Number(platformFeePercent) / 100)).toFixed(2))
     : 0;
+  const displayFreelancerPayout = Number.isFinite(estimatedFreelancerPayout) ? estimatedFreelancerPayout : 0;
 
   async function createInvoice(event: FormEvent) {
     event.preventDefault();
@@ -269,7 +270,7 @@ export default function App() {
                 <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required />
               </label>
               <div className="invoice-summary">
-                <p className="muted">Estimated freelancer payout: <strong>₦{estimatedFreelancerPayout.toLocaleString()}</strong></p>
+                <p className="muted">Estimated freelancer payout: <strong>₦{displayFreelancerPayout.toLocaleString()}</strong></p>
               </div>
               <button type="submit" disabled={isSubmitting} className={isSubmitting ? 'is-loading' : ''}>
                 {isSubmitting ? 'Creating invoice...' : 'Create payment link'} <span>↗</span>
