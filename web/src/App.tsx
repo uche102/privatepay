@@ -40,6 +40,7 @@ export default function App() {
         await wallet.connect({ permissions: ['send_transaction'] });
         const result = await wallet.requestPayment(uri);
         setPaymentRequest(`Submitted: ${result.txid}`);
+        markPaid(invoice);
         return;
       } catch (error) {
         setWalletError(error instanceof Error ? error.message : 'Zucchini payment was cancelled.');
