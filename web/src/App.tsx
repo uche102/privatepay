@@ -40,7 +40,6 @@ export default function App() {
   const [description, setDescription] = useState('');
   const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('1500');
   const [platformFeePercent, setPlatformFeePercent] = useState('2.5');
-  const [freelancerWalletAddress, setFreelancerWalletAddress] = useState('');
   const [freelancerZcashAddress, setFreelancerZcashAddress] = useState('');
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
   const [publicInvoice, setPublicInvoice] = useState<Invoice | null>(null);
@@ -49,12 +48,6 @@ export default function App() {
   const [paymentState, setPaymentState] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const invoiceId = new URLSearchParams(window.location.search).get('invoice');
-
-  useEffect(() => {
-    if (wallet?.address) {
-      setFreelancerWalletAddress(wallet.address);
-    }
-  }, [wallet?.address]);
 
   useEffect(() => {
     if (!invoiceId) {
@@ -87,6 +80,11 @@ export default function App() {
     event.preventDefault();
 
     if (isSubmitting) {
+      return;
+    }
+
+    if (!wallet?.address) {
+      setErrorMessage('Your Pollar wallet address is still loading. Please try again in a moment.');
       return;
     }
 
@@ -123,7 +121,7 @@ export default function App() {
       return;
     }
 
-    const walletAddress = freelancerWalletAddress.trim() || wallet?.address || 'wallet-unset';
+    const walletAddress = wallet.address;
     const requestOptions: RequestInit = {
       method: 'POST',
       headers: {
@@ -240,12 +238,13 @@ export default function App() {
             <h2>Create an invoice</h2>
             <form onSubmit={createInvoice} className="form">
               <label>
-                Freelancer wallet address
+                Your Pollar wallet address
                 <input
-                  value={freelancerWalletAddress}
-                  onChange={(event) => setFreelancerWalletAddress(event.target.value)}
+                  value={wallet?.address ?? ''}
                   placeholder="Wallet address"
+                  readOnly
                 />
+                <small>Assigned to the email account currently signed in.</small>
               </label>
               <label>
                 Zcash shielded receiving address
