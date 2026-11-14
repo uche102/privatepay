@@ -29,6 +29,9 @@ code { overflow-wrap: anywhere; padding: 13px; color: #f5eaff; border: 1px solid
 button { border: 0; border-radius: 999px; padding: 14px 20px; color: #26006d; background: #ffc52e; font-weight: 700; cursor: pointer; box-shadow: 0 9px 25px #ffb8003d; }
 button span { margin-left: 8px; font-size: 18px; }
 .ghost-button { padding: 8px 0; color: #e4d4f5; background: transparent; box-shadow: none; justify-self: start; }
+.login-area { display: grid; gap: 14px; justify-items: start; margin-top: 28px; }
+.login-notice { margin: 0; padding: 11px 13px; color: #ffe8a1; border: 1px solid #ffc52e55; border-radius: 12px; background: #6d430d4d; font-size: 13px; line-height: 1.45; }
+.login-notice span { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; color: #26006d; border-radius: 50%; background: #ffc52e; font-weight: 800; }
 hr { width: 100%; border: 0; border-top: 1px solid #ffffff26; margin: 22px 0; }
 h2 { margin: 8px 0; font-size: 22px; }
 .form, label { display: grid; gap: 7px; }

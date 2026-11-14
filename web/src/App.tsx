@@ -104,7 +104,10 @@ export default function App() {
             {invoices.length > 0 && <div className="history"><h2>Recent invoices</h2>{invoices.map((invoice) => <div className="row" key={invoice.id}><span>{invoice.description}<small>₦{Number(invoice.amount).toLocaleString()}</small></span><span className={invoice.status}>{invoice.status}</span></div>)}</div>}
           </div>
         ) : (
-          <button onClick={openLoginModal}>Log in with Pollar</button>
+          <div className="login-area">
+            <button onClick={openLoginModal}>Log in with Pollar <span>↗</span></button>
+            <p className="login-notice"><span>!</span> Google login is currently unavailable. Please use another available login method.</p>
+          </div>
         )}
       </section>
     </main>
