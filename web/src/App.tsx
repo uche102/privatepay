@@ -1,101 +1,183 @@
 import { usePollar } from '@pollar/react';
-import { useState, type FormEvent } from 'react';
-import { createZucchiniClient, discoverZucchiniProvider } from '@zucchinifi/dapp-sdk/zcash';
+import { useEffect, useState, type FormEvent } from 'react';
 
-type Invoice = { id: string; amount: string; description: string; recipient: string; zcashAddress: string; status: 'pending' | 'paid'; };
-const demoZcashAddress = 'utest152yu6ln3kfhf204k6u6gr42307tq05gekuyvxuzy275zf37z43ruuvx58hvy6lfrcxkh4cz7njx5lfauqvndns0f82p5axtd2epau9dkue5fwx94nx0emyyky3eelztlzc3e2f0gfzhgggxrp2j0xyuu2ffpj6ep6wz9f0hzrgsxkezt';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const shieldedAddressPattern = /^(?:u|z)[A-Za-z0-9]{20,}$/i;
 
-const storageKey = 'privatepay-invoices';
+type Invoice = {
+  id: string;
+  amountNgn: number;
+  description: string;
+  status: string;
+  freelancerZcashAddress: string;
+  clientPaymentReference: string | null;
+  clientPaymentTxid: string | null;
+  zcashPayoutTxid: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
-function readInvoices(): Invoice[] {
-  try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') as Invoice[]; } catch { return []; }
+function isShieldedAddress(value: string): boolean {
+  return shieldedAddressPattern.test(value.trim());
 }
 
-function base64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = '';
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function buildZcashPaymentUri(address: string, memo: string, amount = '0.001'): string {
+  return `zcash:${address}?amount=${amount}&memo=${encodeURIComponent(memo)}`;
 }
 
 export default function App() {
   const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
-  const [invoices, setInvoices] = useState<Invoice[]>(readInvoices);
-  const invoiceId = new URLSearchParams(window.location.search).get('invoice');
-  const publicInvoice = invoiceId ? invoices.find((invoice) => invoice.id === invoiceId) : null;
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [created, setCreated] = useState<Invoice | null>(null);
+  const [freelancerWalletAddress, setFreelancerWalletAddress] = useState('');
+  const [freelancerZcashAddress, setFreelancerZcashAddress] = useState('');
+  const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
+  const [publicInvoice, setPublicInvoice] = useState<Invoice | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const [paymentRequest, setPaymentRequest] = useState('');
-  const [walletError, setWalletError] = useState('');
+  const [paymentState, setPaymentState] = useState('');
+  const invoiceId = new URLSearchParams(window.location.search).get('invoice');
 
-  async function requestZcashPayment(invoice: Invoice) {
-    const uri = `zcash:${invoice.zcashAddress ?? demoZcashAddress}?amount=0.001&memo=${base64Url(`PrivatePay invoice ${invoice.id}`)}`;
-    setPaymentRequest(uri);
-    setWalletError('');
-    const provider = discoverZucchiniProvider();
-    if (provider) {
-      try {
-        const wallet = createZucchiniClient(provider);
-        await wallet.connect({ permissions: ['send_transaction'] });
-        const result = await wallet.requestPayment(uri);
-        setPaymentRequest(`Submitted: ${result.txid}`);
-        markPaid(invoice);
-        return;
-      } catch (error) {
-        setWalletError(error instanceof Error ? error.message : 'Zucchini payment was cancelled.');
-        return;
-      }
+  useEffect(() => {
+    if (wallet?.address) {
+      setFreelancerWalletAddress(wallet.address);
     }
-    try { await navigator.clipboard.writeText(uri); } catch { /* Clipboard permission is optional. */ }
-    setWalletError('Zucchini Wallet was not detected. The payment request was copied instead.');
-  }
+  }, [wallet?.address]);
 
-  function createInvoice(event: FormEvent) {
+  useEffect(() => {
+    if (!invoiceId) {
+      setPublicInvoice(null);
+      return;
+    }
+
+    fetch(`${API_BASE}/api/invoices/${invoiceId}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Invoice not found');
+        }
+        return response.json() as Promise<Invoice>;
+      })
+      .then((invoice) => setPublicInvoice(invoice))
+      .catch(() => setPublicInvoice(null));
+  }, [invoiceId]);
+
+  async function createInvoice(event: FormEvent) {
     event.preventDefault();
-    if (!amount || Number(amount) <= 0 || !description.trim()) return;
-    const invoice: Invoice = { id: crypto.randomUUID().slice(0, 8), amount, description: description.trim(), recipient: wallet?.address ?? 'testnet-wallet', zcashAddress: demoZcashAddress, status: 'pending' };
-    const next = [invoice, ...invoices];
-    setInvoices(next); setCreated(invoice); setAmount(''); setDescription('');
-    localStorage.setItem(storageKey, JSON.stringify(next));
+
+    if (!amount || Number(amount) <= 0) {
+      setErrorMessage('Enter a valid NGN amount.');
+      return;
+    }
+
+    if (!description.trim()) {
+      setErrorMessage('Add a description for the invoice.');
+      return;
+    }
+
+    if (!freelancerZcashAddress.trim() || !isShieldedAddress(freelancerZcashAddress)) {
+      setErrorMessage('Use a real shielded Zcash testnet receiving address.');
+      return;
+    }
+
+    const walletAddress = freelancerWalletAddress.trim() || wallet?.address || 'wallet-unset';
+    const requestOptions: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Freelancer-Wallet': walletAddress,
+      },
+      body: JSON.stringify({
+        amountNgn: Number(amount),
+        description: description.trim(),
+        freelancerZcashAddress: freelancerZcashAddress.trim(),
+      }),
+    };
+
+    try {
+      const response = await fetch(`${API_BASE}/api/invoices`, requestOptions);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to create invoice.');
+      }
+
+      const invoice = payload as Invoice;
+      setCreatedInvoice(invoice);
+      setErrorMessage('');
+      setAmount('');
+      setDescription('');
+      setFreelancerZcashAddress('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown server error.';
+      setErrorMessage(message);
+    }
   }
 
-  function markPaid(invoice: Invoice) {
-    const next = invoices.map((item) => item.id === invoice.id ? { ...item, status: 'paid' as const } : item);
-    setInvoices(next); setCreated(next.find((item) => item.id === invoice.id) ?? null); localStorage.setItem(storageKey, JSON.stringify(next));
+  async function requestShieldedPayment(invoice: Invoice) {
+    const uri = buildZcashPaymentUri(invoice.freelancerZcashAddress, `PrivatePay invoice ${invoice.id}`);
+    setPaymentRequest(uri);
+    setPaymentState('Attempting to open the shielded payment request.');
+
+    try {
+      await navigator.clipboard.writeText(uri);
+      setPaymentState('Payment request copied to your clipboard. Paste it into a compatible Zcash wallet to complete the shielded payment.');
+    } catch {
+      setPaymentState('No clipboard permission was granted. You can still use the payment URI shown below.');
+    }
   }
 
   if (invoiceId) {
     return (
       <main className="app-shell public-shell">
-        <div className="coin coin-one">₿</div><div className="coin coin-two">◆</div>
+        <div className="coin coin-one">₿</div>
+        <div className="coin coin-two">◆</div>
         <section className="card public-invoice">
           <div className="brand"><span className="brand-mark">✦</span> PRIVATEPAY</div>
           <p className="eyebrow">SECURE INVOICE · TESTNET</p>
-          {publicInvoice ? <>
-            <span className="badge">{publicInvoice.status === 'paid' ? 'PAYMENT COMPLETE' : 'PAYMENT REQUEST'}</span>
-            <h1 className="display-title">{publicInvoice.description}</h1>
-            <p className="muted">Pay this invoice securely on Pollar testnet.</p>
-            <strong className="amount">₦{Number(publicInvoice.amount).toLocaleString()}</strong>
-            <p className="muted">Pollar settlement wallet</p>
-            <code>{publicInvoice.recipient}</code>
-            {publicInvoice.status === 'pending' ? <button onClick={() => void requestZcashPayment(publicInvoice)}>Pay with Zucchini <span>↗</span></button> : <><p className="paid-message">✓ Payment submitted</p><div className="payout"><span className="badge">ZCASH TESTNET PAYOUT</span><p>Send <strong>0.001 ZEC</strong> on Zcash testnet to:</p><code>{publicInvoice.zcashAddress ?? demoZcashAddress}</code><p className="muted">Approve the request in Zucchini Wallet, then wait for confirmation.</p></div></>}
-            {paymentRequest && <p className="request-note">{paymentRequest.startsWith('Submitted:') ? paymentRequest : 'Payment request copied. If the wallet did not open, paste it into Zucchini Wallet.'}</p>}
-            {walletError && <p className="wallet-error">{walletError}</p>}
-          </> : <><h1>Invoice not found</h1><p className="muted">This invoice link may have expired or is unavailable in this browser.</p></>}
+          {publicInvoice ? (
+            <>
+              <span className="badge">{publicInvoice.status === 'payment_confirmed' || publicInvoice.status === 'payout_completed' ? 'PAYMENT COMPLETE' : 'PAYMENT REQUEST'}</span>
+              <h1 className="display-title">{publicInvoice.description}</h1>
+              <p className="muted">Pay this invoice using a shielded Zcash payment request.</p>
+              <strong className="amount">₦{publicInvoice.amountNgn.toLocaleString()}</strong>
+              <p className="muted">Recipient Zcash address</p>
+              <code>{publicInvoice.freelancerZcashAddress}</code>
+              {publicInvoice.status === 'pending' || publicInvoice.status === 'payment_submitted' ? (
+                <button onClick={() => void requestShieldedPayment(publicInvoice)}>Pay with shielded Zcash <span>↗</span></button>
+              ) : (
+                <p className="paid-message">✓ Payment status: {publicInvoice.status}</p>
+              )}
+              {paymentRequest && <p className="request-note">{paymentRequest}</p>}
+              {paymentState && <p className="request-note">{paymentState}</p>}
+            </>
+          ) : (
+            <>
+              <h1>Invoice not found</h1>
+              <p className="muted">This invoice link may be invalid or unavailable.</p>
+            </>
+          )}
         </section>
       </main>
     );
   }
 
   return (
-      <main className="app-shell dashboard-shell">
-      <div className="coin coin-one">₿</div><div className="coin coin-two">◆</div><div className="coin coin-three">₿</div>
+    <main className="app-shell dashboard-shell">
+      <div className="coin coin-one">₿</div>
+      <div className="coin coin-two">◆</div>
+      <div className="coin coin-three">₿</div>
       <section className="card dashboard-card">
-        <div className="topbar"><div className="brand"><span className="brand-mark">✦</span> PRIVATEPAY</div><span className="network-pill"><i /> TESTNET</span></div>
-        <div className="hero-copy"><p className="eyebrow">PRIVATE PAYMENTS, SIMPLIFIED</p><h1 className="display-title">Private invoices.<br /><em>Powerful payouts.</em></h1>
-        <p className="muted">Connect your Pollar wallet to manage freelancer payments.</p>
+        <div className="topbar">
+          <div className="brand"><span className="brand-mark">✦</span> PRIVATEPAY</div>
+          <span className="network-pill"><i /> TESTNET</span>
         </div>
+
+        <div className="hero-copy">
+          <p className="eyebrow">PRIVATE PAYMENTS, SIMPLIFIED</p>
+          <h1 className="display-title">Private invoices.<br /><em>Powerful payouts.</em></h1>
+          <p className="muted">Add your real Zcash receiving address and create a shareable invoice.</p>
+        </div>
+
         {isAuthenticated ? (
           <div className="session">
             <p>Logged in wallet</p>
@@ -104,17 +186,50 @@ export default function App() {
             <hr />
             <h2>Create an invoice</h2>
             <form onSubmit={createInvoice} className="form">
-              <label>Amount (NGN)<input type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="25000" required /></label>
-              <label>What are you charging for?<input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required /></label>
+              <label>
+                Freelancer wallet address
+                <input
+                  value={freelancerWalletAddress}
+                  onChange={(event) => setFreelancerWalletAddress(event.target.value)}
+                  placeholder="Wallet address"
+                />
+              </label>
+              <label>
+                Zcash shielded receiving address
+                <input
+                  value={freelancerZcashAddress}
+                  onChange={(event) => setFreelancerZcashAddress(event.target.value)}
+                  placeholder="u... or z..."
+                  required
+                />
+              </label>
+              <label>
+                Amount (NGN)
+                <input type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="25000" required />
+              </label>
+              <label>
+                Description
+                <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required />
+              </label>
               <button type="submit">Create payment link <span>↗</span></button>
             </form>
-            {created && <div className="invoice"><span className="badge">{created.status === 'paid' ? 'PAID' : 'PENDING'}</span><h2>{created.description}</h2><strong>₦{Number(created.amount).toLocaleString()}</strong><code>{window.location.origin}/?invoice={created.id}</code>{created.status === 'pending' && <button onClick={() => void requestZcashPayment(created)}>Open Zucchini payment</button>}</div>}
-            {invoices.length > 0 && <div className="history"><h2>Recent invoices</h2>{invoices.map((invoice) => <div className="row" key={invoice.id}><span>{invoice.description}<small>₦{Number(invoice.amount).toLocaleString()}</small></span><span className={invoice.status}>{invoice.status}</span></div>)}</div>}
+
+            {errorMessage && <p className="wallet-error">{errorMessage}</p>}
+
+            {createdInvoice && (
+              <div className="invoice">
+                <span className="badge">{createdInvoice.status}</span>
+                <h2>{createdInvoice.description}</h2>
+                <strong>₦{createdInvoice.amountNgn.toLocaleString()}</strong>
+                <code>{window.location.origin}/?invoice={createdInvoice.id}</code>
+                <p className="muted">Zcash receiving address: {createdInvoice.freelancerZcashAddress}</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="login-area">
             <button onClick={openLoginModal}>Log in with Pollar <span>↗</span></button>
-            <p className="login-notice"><span>!</span> Google login is currently unavailable. Please use another available login method.</p>
+            <p className="login-notice"><span>!</span> Use the actual wallet connection on the device that owns the freelancer account.</p>
           </div>
         )}
       </section>
