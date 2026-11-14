@@ -11,6 +11,13 @@ function readInvoices(): Invoice[] {
   try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') as Invoice[]; } catch { return []; }
 }
 
+function base64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export default function App() {
   const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
   const [invoices, setInvoices] = useState<Invoice[]>(readInvoices);
@@ -23,7 +30,7 @@ export default function App() {
   const [walletError, setWalletError] = useState('');
 
   async function requestZcashPayment(invoice: Invoice) {
-    const uri = `zcash:${invoice.zcashAddress ?? demoZcashAddress}?amount=0.001&memo=${encodeURIComponent(`PrivatePay invoice ${invoice.id}`)}`;
+    const uri = `zcash:${invoice.zcashAddress ?? demoZcashAddress}?amount=0.001&memo=${base64Url(`PrivatePay invoice ${invoice.id}`)}`;
     setPaymentRequest(uri);
     setWalletError('');
     const provider = discoverZucchiniProvider();
