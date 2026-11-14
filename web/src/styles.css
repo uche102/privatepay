@@ -30,6 +30,7 @@ button { border: 0; border-radius: 999px; padding: 14px 20px; color: #26006d; ba
 button span { margin-left: 8px; font-size: 18px; }
 .ghost-button { padding: 8px 0; color: #e4d4f5; background: transparent; box-shadow: none; justify-self: start; }
 .login-area { display: grid; gap: 14px; justify-items: start; margin-top: 28px; }
+.wallet-status-banner { width: 100%; padding: 12px 14px; color: #ffe8a1; border: 1px solid #ffb74d66; border-radius: 12px; background: rgba(122, 67, 18, 0.55); font-size: 14px; font-weight: 700; line-height: 1.5; }
 .login-notice { margin: 0; padding: 11px 13px; color: #ffe8a1; border: 1px solid #ffc52e55; border-radius: 12px; background: #6d430d4d; font-size: 13px; line-height: 1.45; }
 .login-notice span { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; color: #26006d; border-radius: 50%; background: #ffc52e; font-weight: 800; }
 .pollar-overlay { background: #10002ebf !important; backdrop-filter: blur(14px); }

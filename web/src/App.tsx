@@ -277,7 +277,10 @@ export default function App() {
           </div>
         ) : (
           <div className="login-area">
-            <button onClick={openLoginModal}>Log in with Pollar <span>↗</span></button>
+            <div className="wallet-status-banner" role="alert">
+              Google sign-in is not available yet. Please use the wallet login flow for now.
+            </div>
+            <button onClick={openLoginModal}>Log in with Pollar wallet <span>↗</span></button>
             <p className="login-notice"><span>!</span> Use the actual wallet connection on the device that owns the freelancer account.</p>
           </div>
         )}
