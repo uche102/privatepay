@@ -46,6 +46,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [paymentRequest, setPaymentRequest] = useState('');
   const [paymentState, setPaymentState] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const invoiceId = new URLSearchParams(window.location.search).get('invoice');
 
   useEffect(() => {
@@ -82,6 +83,10 @@ export default function App() {
 
   async function createInvoice(event: FormEvent) {
     event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
 
     if (!amount || Number(amount) <= 0) {
       setErrorMessage('Enter a valid NGN amount.');
@@ -133,6 +138,9 @@ export default function App() {
       }),
     };
 
+    setIsSubmitting(true);
+    setErrorMessage('');
+
     try {
       const response = await fetch(`${API_BASE}/api/invoices`, requestOptions);
       const payload = await response.json().catch(() => ({}));
@@ -143,13 +151,14 @@ export default function App() {
 
       const invoice = payload as Invoice;
       setCreatedInvoice(invoice);
-      setErrorMessage('');
       setAmount('');
       setDescription('');
       setFreelancerZcashAddress('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown server error.';
       setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -222,7 +231,7 @@ export default function App() {
           <div className="session">
             <p>Logged in wallet</p>
             <code>{wallet?.address ?? 'Wallet address pending'}</code>
-            <button className="ghost-button" onClick={() => void logout()}>Log out</button>
+            <button type="button" className="ghost-button" onClick={() => void logout()}>Log out</button>
             <hr />
             <h2>Create an invoice</h2>
             <form onSubmit={createInvoice} className="form">
@@ -262,13 +271,15 @@ export default function App() {
               <div className="invoice-summary">
                 <p className="muted">Estimated freelancer payout: <strong>₦{estimatedFreelancerPayout.toLocaleString()}</strong></p>
               </div>
-              <button type="submit">Create payment link <span>↗</span></button>
+              <button type="submit" disabled={isSubmitting} className={isSubmitting ? 'is-loading' : ''}>
+                {isSubmitting ? 'Creating invoice...' : 'Create payment link'} <span>↗</span>
+              </button>
             </form>
 
-            {errorMessage && <p className="wallet-error">{errorMessage}</p>}
+            {errorMessage && <p className="wallet-error" role="alert">{errorMessage}</p>}
 
             {createdInvoice && (
-              <div className="invoice">
+              <div className="invoice" aria-live="polite">
                 <span className="badge">{createdInvoice.status}</span>
                 <h2>{createdInvoice.description}</h2>
                 <strong>₦{createdInvoice.amountNgn.toLocaleString()}</strong>
@@ -284,7 +295,7 @@ export default function App() {
             <div className="wallet-status-banner" role="alert">
               Google sign-in is not available yet. Please use the wallet login flow for now.
             </div>
-            <button onClick={openLoginModal}>Log in with Pollar wallet <span>↗</span></button>
+            <button type="button" onClick={openLoginModal}>Log in with Pollar wallet <span>↗</span></button>
             <p className="login-notice"><span>!</span> Use the actual wallet connection on the device that owns the freelancer account.</p>
           </div>
         )}
