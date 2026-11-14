@@ -1,7 +1,8 @@
 import { usePollar } from '@pollar/react';
 import { useEffect, useState, type FormEvent } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_KEY = import.meta.env.VITE_PRIVATEPAY_API_KEY ?? import.meta.env.VITE_API_KEY ?? '';
 const shieldedAddressPattern = /^(?:u|z)[A-Za-z0-9]{20,}$/i;
 
 type Invoice = {
@@ -50,6 +51,11 @@ export default function App() {
       return;
     }
 
+    if (!API_BASE) {
+      setPublicInvoice(null);
+      return;
+    }
+
     fetch(`${API_BASE}/api/invoices/${invoiceId}`)
       .then((response) => {
         if (!response.ok) {
@@ -79,12 +85,18 @@ export default function App() {
       return;
     }
 
+    if (!API_BASE) {
+      setErrorMessage('Missing VITE_API_BASE_URL. Set the deployed backend URL in the frontend environment before creating invoices.');
+      return;
+    }
+
     const walletAddress = freelancerWalletAddress.trim() || wallet?.address || 'wallet-unset';
     const requestOptions: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Freelancer-Wallet': walletAddress,
+        ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
       },
       body: JSON.stringify({
         amountNgn: Number(amount),
