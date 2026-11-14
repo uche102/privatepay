@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 
 import { isAllowedOrigin } from './cors.js';
 import { getNextStatus, INVOICE_STATUSES, isValidZcashAddress, type InvoiceStatus } from './invoice-state.js';
-import { sendShieldedPayout, verifyShieldedPayout } from './zcash.js';
+import { verifyIncomingShieldedPayment } from './zcash.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
@@ -112,6 +112,9 @@ const invoiceTableSql = `
 `;
 
 database.exec(invoiceTableSql);
+database.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_client_payment_txid_unique
+  ON invoices (clientPaymentTxid)
+  WHERE clientPaymentTxid IS NOT NULL AND clientPaymentTxid <> '';`);
 
 const invoiceColumns = database.prepare('PRAGMA table_info(invoices)').all() as Array<Record<string, unknown>>;
 const existingInvoiceColumns = new Set(invoiceColumns.map((column) => String(column.name)));
@@ -255,113 +258,76 @@ app.get('/api/invoices/:id/status', (request, response) => {
   });
 });
 
-app.post('/api/invoices/:id/pay', async (request, response) => {
-  const body = request.body as Record<string, unknown>;
-  const invoiceRow = database
-    .prepare(
-      `SELECT * FROM invoices WHERE id = ?`
-    )
-    .get(request.params.id) as Record<string, unknown> | undefined;
-
-  if (!invoiceRow) {
-    return response.status(404).json({ error: 'Invoice not found' });
+app.post('/api/invoices/:id/verify-payment', rateLimit(maxRequestsPerWindow, windowMs), async (request, response) => {
+  const txid = typeof request.body?.clientPaymentTxid === 'string'
+    ? request.body.clientPaymentTxid.trim().toLowerCase()
+    : '';
+  if (!/^[a-f0-9]{64}$/.test(txid)) {
+    return response.status(400).json({ error: 'Enter the 64-character Zcash transaction ID from your wallet.' });
   }
 
-  const currentStatus = String(invoiceRow.status) as InvoiceStatus;
-  const clientPaymentReference = typeof body.clientPaymentReference === 'string' ? body.clientPaymentReference.trim() : undefined;
-  const clientPaymentTxid = typeof body.clientPaymentTxid === 'string' ? body.clientPaymentTxid.trim() : '';
-  const triggerPayout = Boolean(body.triggerPayout);
-  const confirmPayment = Boolean(body.confirmPayment);
-  const action = typeof body.action === 'string' ? body.action : 'submit';
-
-  if (clientPaymentReference) {
-    database
-      .prepare('UPDATE invoices SET clientPaymentReference = ?, updatedAt = ? WHERE id = ?')
-      .run(clientPaymentReference, currentIso(), request.params.id);
+  const invoice = database.prepare('SELECT * FROM invoices WHERE id = ?').get(request.params.id) as Record<string, unknown> | undefined;
+  if (!invoice) {
+    return response.status(404).json({ error: 'Invoice not found.' });
   }
 
-  if (clientPaymentTxid) {
-    database
-      .prepare('UPDATE invoices SET clientPaymentTxid = ?, updatedAt = ? WHERE id = ?')
-      .run(clientPaymentTxid, currentIso(), request.params.id);
+  const currentStatus = String(invoice.status) as InvoiceStatus;
+  if (currentStatus === 'payment_confirmed' || currentStatus === 'payout_completed') {
+    return response.json({ invoice: publicInvoiceFields(invoice), verification: { status: 'confirmed' } });
+  }
+  if (currentStatus === 'failed' || currentStatus === 'payout_processing') {
+    return response.status(409).json({ error: `This invoice cannot be verified while it is ${currentStatus}.` });
   }
 
+  const txidOwner = database.prepare('SELECT id FROM invoices WHERE clientPaymentTxid = ? AND id <> ?').get(txid, request.params.id) as { id: string } | undefined;
+  if (txidOwner) {
+    return response.status(409).json({ error: 'That transaction ID has already been submitted for another invoice.' });
+  }
+
+  const submittedStatus = currentStatus === 'pending' ? getNextStatus(currentStatus, 'payment_submitted') : currentStatus;
+  database.prepare('UPDATE invoices SET clientPaymentTxid = ?, status = ?, updatedAt = ? WHERE id = ?')
+    .run(txid, submittedStatus, currentIso(), request.params.id);
+
+  const expectedAmountZec = Number(invoice.amountNgn) / Number(invoice.exchangeRateNgnPerZec);
   try {
-    if (triggerPayout) {
-      if (currentStatus !== 'payment_confirmed') {
-        return response.status(409).json({
-          error: 'Payment confirmation is required before a payout can be sent.',
-          status: currentStatus,
-        });
-      }
-
-      if (invoiceRow.zcashPayoutTxid) {
-        return response.status(409).json({
-          error: 'This payout has already been attempted or completed.',
-          status: currentStatus,
-          zcashPayoutTxid: invoiceRow.zcashPayoutTxid,
-        });
-      }
-
-      const payout = await sendShieldedPayout(
-        String(invoiceRow.freelancerZcashAddress ?? '').trim(),
-        Number(invoiceRow.amountNgn),
-        `PrivatePay invoice ${request.params.id}`
-      );
-
-      const finalStatus = payout.status === 'pending' ? 'payout_processing' : 'payout_completed';
-      const payoutState = finalStatus === 'payout_completed' ? 'payout_completed' : 'payout_processing';
-      database
-        .prepare(
-          'UPDATE invoices SET zcashPayoutTxid = ?, status = ?, updatedAt = ? WHERE id = ?'
-        )
-        .run(payout.txid, payoutState, currentIso(), request.params.id);
-
-      if (payoutState === 'payout_processing') {
-        const verified = await verifyShieldedPayout(payout.txid);
-        if (verified === 'confirmed') {
-          database.prepare('UPDATE invoices SET status = ?, updatedAt = ? WHERE id = ?').run('payout_completed', currentIso(), request.params.id);
-        }
-      }
-
-      return response.status(202).json({
-        id: request.params.id,
-        status: payoutState,
-        message: 'Payout request accepted. A real Zcash RPC transaction must be verified before the payout is marked completed.',
-        zcashPayoutTxid: payout.txid,
-      });
+    const verification = await verifyIncomingShieldedPayment(
+      String(invoice.freelancerZcashAddress ?? '').trim(),
+      txid,
+      expectedAmountZec
+    );
+    if (verification.status === 'confirmed') {
+      const confirmedStatus = getNextStatus(submittedStatus, 'payment_confirmed');
+      database.prepare('UPDATE invoices SET status = ?, updatedAt = ? WHERE id = ?')
+        .run(confirmedStatus, currentIso(), request.params.id);
     }
 
-    if ((action === 'confirm-payment' || confirmPayment) && currentStatus === 'payment_submitted') {
-      const next = getNextStatus(currentStatus, 'payment_confirmed');
-      database.prepare('UPDATE invoices SET status = ?, updatedAt = ? WHERE id = ?').run(next, currentIso(), request.params.id);
-      return response.json({ id: request.params.id, status: next });
-    }
-
-    if ((action === 'submit-payment' || action === 'pay' || (!confirmPayment && !triggerPayout)) && clientPaymentTxid) {
-      if (currentStatus === 'payout_completed' || currentStatus === 'payout_processing') {
-        return response.status(409).json({ error: 'This invoice is already in a payout state.', status: currentStatus });
-      }
-
-      const next = getNextStatus(currentStatus, 'payment_submitted');
-      database.prepare('UPDATE invoices SET status = ?, updatedAt = ? WHERE id = ?').run(next, currentIso(), request.params.id);
-      return response.json({
-        id: request.params.id,
-        status: next,
-        clientPaymentTxid,
-        message: 'Payment submitted. Confirm the transaction before creating the payout.',
-      });
-    }
-
-    return response.status(400).json({
-      error: 'Unsupported payment action. Provide clientPaymentTxid plus action or confirmPayment=true.',
-      validActions: ['submit-payment', 'confirm-payment', 'send-payout'],
+    const updated = database.prepare('SELECT * FROM invoices WHERE id = ?').get(request.params.id) as Record<string, unknown>;
+    const messages: Record<string, string> = {
+      not_configured: 'Payment was submitted, but the server has no Zcash RPC connection yet.',
+      not_found: 'The connected Zcash wallet cannot see this transaction for the invoice address yet. The address must be monitored by the wallet RPC.',
+      pending: 'Payment found. Waiting for the required Zcash confirmation.',
+      underpaid: `The transaction received ${verification.receivedAmountZec ?? 0} ZEC; this invoice requires at least ${verification.expectedAmountZec} ZEC.`,
+      confirmed: 'Payment verified on the connected Zcash wallet.',
+    };
+    const httpStatus = verification.status === 'not_configured' ? 503 : 200;
+    return response.status(httpStatus).json({
+      invoice: publicInvoiceFields(updated),
+      verification,
+      message: messages[verification.status],
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Payment processing failed';
-    database.prepare('UPDATE invoices SET status = ?, updatedAt = ? WHERE id = ?').run('failed', currentIso(), request.params.id);
-    return response.status(400).json({ error: message, status: 'failed' });
+  } catch {
+    return response.status(503).json({
+      invoice: publicInvoiceFields(database.prepare('SELECT * FROM invoices WHERE id = ?').get(request.params.id) as Record<string, unknown>),
+      verification: { status: 'unavailable' },
+      message: 'Could not inspect this shielded payment. The server wallet must be online and able to view the invoice receiving address.',
+    });
   }
+});
+
+app.post('/api/invoices/:id/pay', (_request, response) => {
+  return response.status(410).json({
+    error: 'This payment endpoint no longer accepts manual confirmations or payout requests. Submit the wallet transaction ID to /api/invoices/:id/verify-payment.',
+  });
 });
 
 app.listen(port, () => {

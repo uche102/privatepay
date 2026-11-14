@@ -1,6 +1,14 @@
 import { isValidZcashAddress } from './invoice-state.js';
 
 export type ShieldedTxStatus = 'pending' | 'confirmed' | 'failed' | 'not_configured';
+export type IncomingPaymentStatus = 'not_configured' | 'not_found' | 'pending' | 'underpaid' | 'confirmed';
+
+export type IncomingPaymentVerification = {
+  status: IncomingPaymentStatus;
+  expectedAmountZec: number;
+  receivedAmountZec?: number;
+  confirmations?: number;
+};
 
 function getRpcConfig() {
   return {
@@ -106,4 +114,46 @@ export async function verifyShieldedPayout(txid: string): Promise<ShieldedTxStat
   } catch (error) {
     return 'failed';
   }
+}
+
+export async function verifyIncomingShieldedPayment(
+  address: string,
+  txid: string,
+  expectedAmountZec: number
+): Promise<IncomingPaymentVerification> {
+  const expected = Math.round(expectedAmountZec * 100_000_000) / 100_000_000;
+  if (!isRpcConfigured()) {
+    return { status: 'not_configured', expectedAmountZec: expected };
+  }
+
+  const received = await rpcCall<Array<{ txid: string; amount: number; confirmations: number }>>(
+    'z_listreceivedbyaddress',
+    [address, 0]
+  );
+  const payments = received.filter((item) => item.txid.toLowerCase() === txid.toLowerCase());
+  if (payments.length === 0) {
+    return { status: 'not_found', expectedAmountZec: expected };
+  }
+
+  const receivedAmountZec = payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const result: IncomingPaymentVerification = {
+    status: 'pending',
+    expectedAmountZec: expected,
+    receivedAmountZec,
+    confirmations: Math.min(...payments.map((payment) => Number(payment.confirmations ?? 0))),
+  };
+
+  if (!Number.isFinite(receivedAmountZec) || receivedAmountZec + 0.000000005 < expected) {
+    return { ...result, status: 'underpaid' };
+  }
+
+  const configuredConfirmations = Number(process.env.ZCASH_MIN_CONFIRMATIONS ?? 1);
+  const minConfirmations = Number.isInteger(configuredConfirmations) && configuredConfirmations > 0
+    ? configuredConfirmations
+    : 1;
+  if ((result.confirmations ?? 0) >= minConfirmations) {
+    result.status = 'confirmed';
+  }
+
+  return result;
 }

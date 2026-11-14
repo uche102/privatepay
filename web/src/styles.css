@@ -41,6 +41,13 @@ button span { margin-left: 8px; font-size: 18px; }
 .ghost-button { padding: 8px 0; color: #e4d4f5; background: transparent; box-shadow: none; justify-self: start; }
 .is-loading { background: #ffd979; }
 .login-area { display: grid; gap: 14px; justify-items: start; margin-top: 28px; }
+.landing-steps { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.landing-steps article { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 15px 13px; border: 1px solid #ffffff26; border-radius: 16px; background: #18004466; animation: landing-enter .5s ease-out both; }
+.landing-steps article:nth-child(2) { animation-delay: .08s; }
+.landing-steps article:nth-child(3) { animation-delay: .16s; }
+.landing-steps article > span { color: #ffc52e; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.landing-steps strong { font-size: 15px; }
+.landing-steps p { margin: 0; color: #dbcbed; font-size: 12px; line-height: 1.45; }
 .wallet-status-banner { width: 100%; padding: 12px 14px; color: #ffe8a1; border: 1px solid #ffb74d66; border-radius: 12px; background: rgba(122, 67, 18, 0.55); font-size: 14px; font-weight: 700; line-height: 1.5; }
 .login-notice { margin: 0; padding: 11px 13px; color: #ffe8a1; border: 1px solid #ffc52e55; border-radius: 12px; background: #6d430d4d; font-size: 13px; line-height: 1.45; }
 .login-notice span { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; color: #26006d; border-radius: 50%; background: #ffc52e; font-weight: 800; }
@@ -68,6 +75,18 @@ input:focus { border-color: #ffc52e; }
 .payout p { margin: 0; }
 .request-note { margin: 0; color: #ffc52e; font-size: 13px; line-height: 1.5; }
 .wallet-error { margin: 0; color: #ffb7ca; font-weight: 700; }
+.payment-verify-form { display: grid; gap: 12px; }
+.payment-verify-form > button { width: 100%; }
+.verification-status { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: start; gap: 10px; padding: 13px; border: 1px solid #ffc52e44; border-radius: 13px; background: #18004466; }
+.verification-status strong { color: #ffc52e; font-size: 13px; }
+.verification-status p { margin: 4px 0 0; color: #dbcbed; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.verification-indicator { width: 10px; height: 10px; margin-top: 3px; border-radius: 50%; background: #8e75b0; }
+.verification-indicator.is-active { background: #ffc52e; animation: verification-pulse 1.2s ease-in-out infinite; }
+.verification-status.is-confirmed { border-color: #72e5a088; }
+.verification-status.is-confirmed strong { color: #72e5a0; }
+.verification-status.is-confirmed .verification-indicator { background: #72e5a0; box-shadow: 0 0 12px #72e5a0aa; }
+@keyframes verification-pulse { 50% { opacity: .35; transform: scale(.72); } }
+@keyframes landing-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .badge, .paid, .pending { color: #ffc52e; font-size: 11px; font-weight: 800; letter-spacing: .1em; }
 .history { display: grid; gap: 10px; margin-top: 24px; }
 .row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #ffffff1f; }
@@ -77,5 +96,6 @@ small { color: #dbcbed; }
 .coin-one { top: 12%; right: 10%; }
 .coin-two { bottom: 12%; left: 8%; width: 46px; height: 46px; font-size: 20px; }
 .coin-three { top: 52%; right: 5%; width: 38px; height: 38px; font-size: 17px; }
-@media (max-width: 560px) { .app-shell { padding: 16px; } .card { padding: 26px 22px; border-radius: 22px; } .topbar { margin-bottom: 42px; } .coin-one { right: -18px; } }
+@media (max-width: 560px) { .app-shell { padding: 16px; } .card { padding: 26px 22px; border-radius: 22px; } .topbar { margin-bottom: 42px; } .coin-one { right: -18px; } .landing-steps { grid-template-columns: 1fr; } .landing-steps article { grid-template-columns: 32px 1fr; align-items: baseline; gap: 5px 8px; } .landing-steps article p { grid-column: 2; } }
+@media (prefers-reduced-motion: reduce) { .verification-indicator.is-active, .landing-steps article { animation: none; } }
 

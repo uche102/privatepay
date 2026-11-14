@@ -46,6 +46,9 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [paymentRequest, setPaymentRequest] = useState('');
   const [paymentState, setPaymentState] = useState('');
+  const [paymentTxid, setPaymentTxid] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState('');
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const invoiceId = new URLSearchParams(window.location.search).get('invoice');
 
@@ -70,6 +73,49 @@ export default function App() {
       .then((invoice) => setPublicInvoice(invoice))
       .catch(() => setPublicInvoice(null));
   }, [invoiceId]);
+
+  useEffect(() => {
+    if (!invoiceId || publicInvoice?.status !== 'payment_submitted' || !publicInvoice.clientPaymentTxid) {
+      return;
+    }
+
+    let stopped = false;
+    let intervalId = 0;
+    const checkPayment = async () => {
+      if (stopped) return;
+      setIsVerifyingPayment(true);
+      try {
+        const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}/verify-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientPaymentTxid: publicInvoice.clientPaymentTxid }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (payload.invoice) setPublicInvoice(payload.invoice as Invoice);
+        setPaymentState(payload.message ?? payload.error ?? 'Checking payment with the Zcash network.');
+        const status = payload.verification?.status ?? 'unavailable';
+        setVerificationStatus(status);
+        if (status === 'confirmed' || status === 'underpaid' || status === 'not_configured' || status === 'unavailable') {
+          stopped = true;
+          window.clearInterval(intervalId);
+        }
+      } catch {
+        setVerificationStatus('unavailable');
+        setPaymentState('Could not reach the payment verification service. Try again later.');
+        stopped = true;
+        window.clearInterval(intervalId);
+      } finally {
+        setIsVerifyingPayment(false);
+      }
+    };
+
+    void checkPayment();
+    intervalId = window.setInterval(() => void checkPayment(), 15000);
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+    };
+  }, [invoiceId, publicInvoice?.status, publicInvoice?.clientPaymentTxid]);
 
   const estimatedFreelancerPayout = Number(amount || 0) > 0 && Number(platformFeePercent || 0) >= 0
     ? Number((Number(amount) * (1 - Number(platformFeePercent) / 100)).toFixed(2))
@@ -176,6 +222,34 @@ export default function App() {
     }
   }
 
+  async function submitPaymentTxid(event: FormEvent) {
+    event.preventDefault();
+    if (!invoiceId || !paymentTxid.trim() || isVerifyingPayment) return;
+    setIsVerifyingPayment(true);
+    setVerificationStatus('checking');
+    setPaymentState('Submitting the transaction ID for Zcash verification.');
+    try {
+      const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}/verify-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientPaymentTxid: paymentTxid.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (payload.invoice) setPublicInvoice(payload.invoice as Invoice);
+      setPaymentState(payload.message ?? payload.error ?? 'Payment verification started.');
+      setVerificationStatus(payload.verification?.status ?? 'unavailable');
+      if (!response.ok && !payload.verification) {
+        setPaymentState(payload.error ?? 'Could not submit this transaction ID.');
+        setVerificationStatus('unavailable');
+      }
+    } catch {
+      setPaymentState('Could not reach the payment verification service. Check the API deployment and try again.');
+      setVerificationStatus('unavailable');
+    } finally {
+      setIsVerifyingPayment(false);
+    }
+  }
+
   if (invoiceId) {
     return (
       <main className="app-shell public-shell">
@@ -193,10 +267,34 @@ export default function App() {
               <p className="muted">Amount to send: <strong>{getInvoiceZecAmount(publicInvoice)} ZEC</strong></p>
               <p className="muted">Recipient Zcash address</p>
               <code>{publicInvoice.freelancerZcashAddress}</code>
-              {publicInvoice.status === 'pending' || publicInvoice.status === 'payment_submitted' ? (
-                <button onClick={() => void copyShieldedAddress(publicInvoice)}>Copy Zcash address</button>
-              ) : (
-                <p className="paid-message">✓ Payment status: {publicInvoice.status}</p>
+              {publicInvoice.status === 'pending' && <button onClick={() => void copyShieldedAddress(publicInvoice)}>Copy Zcash address</button>}
+              {publicInvoice.status === 'payment_confirmed' || publicInvoice.status === 'payout_completed' ? (
+                <p className="paid-message">Payment verified on the Zcash network.</p>
+              ) : null}
+              {(publicInvoice.status === 'pending' || publicInvoice.status === 'payment_submitted') && (
+                <form className="payment-verify-form" onSubmit={submitPaymentTxid}>
+                  <label>
+                    Zcash transaction ID
+                    <input
+                      value={paymentTxid || publicInvoice.clientPaymentTxid || ''}
+                      onChange={(event) => setPaymentTxid(event.target.value)}
+                      placeholder="Paste the transaction ID from your wallet"
+                      autoComplete="off"
+                      required
+                    />
+                  </label>
+                  <button type="submit" disabled={isVerifyingPayment}>
+                    {isVerifyingPayment ? 'Checking Zcash...' : publicInvoice.status === 'payment_submitted' ? 'Check payment' : 'Verify payment'}
+                  </button>
+                  <div className={`verification-status ${verificationStatus === 'confirmed' ? 'is-confirmed' : ''}`} role="status" aria-live="polite">
+                    <span className={`verification-indicator ${isVerifyingPayment ? 'is-active' : ''}`} aria-hidden="true" />
+                    <div>
+                      <strong>{verificationStatus === 'confirmed' ? 'Payment confirmed' : isVerifyingPayment ? 'Verifying transaction' : 'Payment verification'}</strong>
+                      <p>{paymentState || 'After sending, paste the transaction ID to check its amount and confirmations.'}</p>
+                    </div>
+                  </div>
+                  <small>The connected Zcash wallet must be able to view this shielded address for verification to work.</small>
+                </form>
               )}
               {paymentRequest && <p className="request-note">{paymentRequest}</p>}
               {paymentState && <p className="request-note">{paymentState}</p>}
@@ -224,9 +322,9 @@ export default function App() {
         </div>
 
         <div className="hero-copy">
-          <p className="eyebrow">PRIVATE PAYMENTS, SIMPLIFIED</p>
-          <h1 className="display-title">Private invoices.<br /><em>Powerful payouts.</em></h1>
-          <p className="muted">Add your real Zcash receiving address and create a shareable invoice.</p>
+          <p className="eyebrow">PRIVATE INVOICING FOR FREELANCERS</p>
+          <h1 className="display-title">Invoice in NGN.<br /><em>Receive ZEC.</em></h1>
+          <p className="muted">Create a shareable invoice, let your client pay from a Zcash wallet, and check the transaction against the connected Zcash node.</p>
         </div>
 
         {isAuthenticated ? (
@@ -295,11 +393,17 @@ export default function App() {
           </div>
         ) : (
           <div className="login-area">
-            <div className="wallet-status-banner" role="alert">
-              Choose a sign-in method: Google or Pollar wallet. Google sign-in is coming soon; Pollar wallet sign-in is available now.
+            <div className="landing-steps" aria-label="How PrivatePay works">
+              <article><span>01</span><strong>Create</strong><p>Set invoice terms and your shielded Zcash address.</p></article>
+              <article><span>02</span><strong>Share</strong><p>Send your client a link with the ZEC amount due.</p></article>
+              <article><span>03</span><strong>Verify</strong><p>Submit the transaction ID for a network check.</p></article>
             </div>
-            <button type="button" onClick={openLoginModal}>Log in with Pollar wallet <span>↗</span></button>
-            <p className="login-notice"><span>!</span> Use the actual wallet connection on the device that owns the freelancer account.</p>
+            <div className="wallet-status-banner" role="note">
+              Zcash testnet demo. Payments require a Zcash wallet that can monitor the receiving address.
+            </div>
+            <p className="login-notice">Two sign-in options: use your email with Pollar, or connect an existing wallet.</p>
+            <button type="button" onClick={openLoginModal}>Continue with Pollar <span>↗</span></button>
+            <p className="login-notice"><span>i</span> Your Pollar wallet address identifies your invoices.</p>
           </div>
         )}
       </section>

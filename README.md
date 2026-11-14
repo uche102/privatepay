@@ -11,13 +11,16 @@ The project is intentionally structured so the backend is the source of truth fo
 
 ## Required environment values
 
-The invoice backend requires an authentication key for freelancer actions and a real Zcash RPC connection for payouts.
+The invoice backend requires an authentication key for freelancer actions and a Zcash RPC wallet connection to verify shielded payments.
 
 Create `server/.env` from `server/.env.example` and set:
 
 ```env
 PORT=3001
 DATABASE_PATH=./privatepay.db
+EXCHANGE_RATE_NGN_PER_ZEC=200
+PLATFORM_FEE_PERCENT=0.00015
+ZCASH_MIN_CONFIRMATIONS=1
 WEB_ORIGIN=http://localhost:5173
 PRIVATEPAY_API_KEY=replace-with-a-strong-random-key
 ZCASH_RPC_URL=http://127.0.0.1:18232
@@ -32,20 +35,15 @@ VITE_API_BASE_URL=http://localhost:3001
 VITE_POLLAR_API_KEY=your-pollar-testnet-publishable-key
 ```
 
-If you want real shielded payouts, the Zcash wallet backend must expose a JSON-RPC endpoint that supports commands such as `z_sendmany` and `gettransaction`. Without those credentials the API will refuse to fabricate a transaction ID.
+Payment verification uses the Zcash wallet RPC. Without a reachable RPC wallet, invoices stay unverified; the app will not mark a payment complete based only on a client-provided transaction ID.
 
-## Zcash payout requirement
+## Shielded payment verification
 
-The application does not hardcode any wallet address. Each freelancer must provide their real shielded Zcash address when creating an invoice. The backend validates that address and rejects invalid data.
+Each freelancer provides their shielded Zcash receiving address when creating an invoice. The client sends the displayed ZEC amount from a compatible wallet, then submits the transaction ID on the public invoice page. The server checks that the connected wallet sees a payment to that invoice address, that the received amount is sufficient, and that the transaction has the configured number of confirmations.
 
-A genuine Zcash payout requires:
+The RPC wallet must be synced and able to view the invoice receiving address. Shielded transaction details are not publicly visible from a transaction ID alone; the connected wallet needs the address or suitable incoming viewing capability. `z_listreceivedbyaddress` only reports shielded receipts for addresses the wallet can view. Never put spending keys or seed phrases in PrivatePay.
 
-1. a Zcash node or wallet with RPC enabled,
-2. `ZCASH_RPC_URL`, `ZCASH_RPC_USER`, and `ZCASH_RPC_PASS` set in the server environment,
-3. the wallet containing the funds or a properly configured wallet account,
-4. a valid shielded testnet recipient address for each invoice.
-
-The server will not create or claim a payout transaction when the RPC configuration is missing.
+PrivatePay's current payment flow sends ZEC directly to the freelancer's shielded address. It verifies receipt; it does not provide escrow or automatically send a second payout.
 
 ## Local development
 
@@ -71,9 +69,9 @@ The frontend runs on `http://localhost:5173` and the API on `http://localhost:30
 
 - The freelancer creates an invoice with their wallet and shielded Zcash address.
 - Public invoice pages expose only the information needed for payment.
-- The client can submit a payment reference and transaction id.
-- The backend records the payment and enforces the required state machine before any payout is attempted.
-- Payouts use the configured Zcash RPC layer and only mark success after verification.
+- The client sends the displayed amount from a Zcash wallet and submits the transaction ID.
+- The public invoice page checks payment status against the connected Zcash RPC wallet and refreshes while the transaction is pending.
+- Payment status becomes confirmed only after the address, amount, and minimum confirmations are verified.
 
 ## Vercel deployment
 
