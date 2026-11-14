@@ -57,7 +57,8 @@ h2 { margin: 8px 0; font-size: 22px; }
 label { color: #dbcbed; font-size: 13px; font-weight: 700; }
 input { width: 100%; max-width: 100%; min-width: 0; border: 1px solid #ffffff26; border-radius: 12px; padding: 13px; color: #fff; background: #18004480; outline: none; }
 input:focus { border-color: #ffc52e; }
-.invoice, .payout { display: grid; gap: 10px; margin-top: 18px; padding: 18px; border: 1px solid #ffffff26; border-radius: 17px; background: #4c15946b; }
+.invoice, .payout { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 10px; margin-top: 18px; padding: 18px; border: 1px solid #ffffff26; border-radius: 17px; background: #4c15946b; }
+.invoice p, .invoice code { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
 .invoice strong, .amount { font-size: 38px; }
 .amount { display: block; margin: 14px 0; }
 .public-invoice { display: grid; gap: 12px; }
