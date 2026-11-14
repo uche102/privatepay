@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 
+import { isAllowedOrigin } from './cors.js';
 import { getNextStatus, INVOICE_STATUSES, isValidZcashAddress, type InvoiceStatus } from './invoice-state.js';
 import { sendShieldedPayout, verifyShieldedPayout } from './zcash.js';
 
@@ -124,7 +125,7 @@ for (const columnName of ['freelancerReceivesNgn', 'exchangeRateNgnPerZec', 'pla
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || origin === process.env.WEB_ORIGIN || origin === 'http://localhost:5173' || /^http:\/\/localhost:\d+$/.test(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
