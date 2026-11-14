@@ -29,8 +29,9 @@ function isShieldedAddress(value: string): boolean {
   return shieldedAddressPattern.test(value.trim());
 }
 
-function buildZcashPaymentUri(address: string, memo: string, amount = '0.001'): string {
-  return `zcash:${address}?amount=${amount}&memo=${encodeURIComponent(memo)}`;
+function getInvoiceZecAmount(invoice: Invoice): string {
+  const amount = invoice.amountNgn / invoice.exchangeRateNgnPerZec;
+  return Number.isFinite(amount) ? amount.toFixed(8).replace(/\.?0+$/, '') : '0';
 }
 
 export default function App() {
@@ -163,16 +164,17 @@ export default function App() {
     }
   }
 
-  async function requestShieldedPayment(invoice: Invoice) {
-    const uri = buildZcashPaymentUri(invoice.freelancerZcashAddress, `PrivatePay invoice ${invoice.id}`);
-    setPaymentRequest(uri);
-    setPaymentState('Attempting to open the shielded payment request.');
+  async function copyShieldedAddress(invoice: Invoice) {
+    const address = invoice.freelancerZcashAddress;
+    const amount = getInvoiceZecAmount(invoice);
+    setPaymentRequest(address);
+    setPaymentState(`Enter ${amount} ZEC in your wallet to pay this invoice.`);
 
     try {
-      await navigator.clipboard.writeText(uri);
-      setPaymentState('Payment request copied to your clipboard. Paste it into a compatible Zcash wallet to complete the shielded payment.');
+      await navigator.clipboard.writeText(address);
+      setPaymentState(`Recipient address copied. Enter ${amount} ZEC in your wallet to pay this invoice.`);
     } catch {
-      setPaymentState('No clipboard permission was granted. You can still use the payment URI shown below.');
+      setPaymentState(`Copy the recipient address shown below, then enter ${amount} ZEC in your wallet.`);
     }
   }
 
@@ -188,12 +190,13 @@ export default function App() {
             <>
               <span className="badge">{publicInvoice.status === 'payment_confirmed' || publicInvoice.status === 'payout_completed' ? 'PAYMENT COMPLETE' : 'PAYMENT REQUEST'}</span>
               <h1 className="display-title">{publicInvoice.description}</h1>
-              <p className="muted">Pay this invoice using a shielded Zcash payment request.</p>
+              <p className="muted">Send the ZEC amount below to the recipient address using your Zcash wallet.</p>
               <strong className="amount">₦{publicInvoice.amountNgn.toLocaleString()}</strong>
+              <p className="muted">Amount to send: <strong>{getInvoiceZecAmount(publicInvoice)} ZEC</strong></p>
               <p className="muted">Recipient Zcash address</p>
               <code>{publicInvoice.freelancerZcashAddress}</code>
               {publicInvoice.status === 'pending' || publicInvoice.status === 'payment_submitted' ? (
-                <button onClick={() => void requestShieldedPayment(publicInvoice)}>Pay with shielded Zcash <span>↗</span></button>
+                <button onClick={() => void copyShieldedAddress(publicInvoice)}>Copy Zcash address</button>
               ) : (
                 <p className="paid-message">✓ Payment status: {publicInvoice.status}</p>
               )}
