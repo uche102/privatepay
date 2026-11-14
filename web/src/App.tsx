@@ -1,7 +1,11 @@
 import { usePollar } from '@pollar/react';
 import { useEffect, useState, type FormEvent } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').trim() || (
+  typeof window !== 'undefined'
+    ? (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin)
+    : ''
+);
 const API_KEY = import.meta.env.VITE_PRIVATEPAY_API_KEY ?? import.meta.env.VITE_API_KEY ?? '';
 const shieldedAddressPattern = /^(?:u|z)[A-Za-z0-9]{20,}$/i;
 
@@ -107,8 +111,8 @@ export default function App() {
       return;
     }
 
-    if (!API_BASE) {
-      setErrorMessage('Missing VITE_API_BASE_URL. Set the deployed backend URL in the frontend environment before creating invoices.');
+    if (!API_BASE || API_BASE === window.location.origin) {
+      setErrorMessage('This deployment is missing a configured backend URL. Set VITE_API_BASE_URL to your deployed API host or proxy requests through the same origin before creating invoices.');
       return;
     }
 
