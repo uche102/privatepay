@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getNextStatus, isValidZcashAddress } from './invoice-state';
+import { getNextStatus, isValidZcashAddress } from './invoice-state.js';
 
 test('payment transitions are allowed in the expected order', () => {
   assert.equal(getNextStatus('pending', 'payment_submitted'), 'payment_submitted');

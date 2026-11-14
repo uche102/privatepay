@@ -10,6 +10,8 @@ import { sendShieldedPayout, verifyShieldedPayout } from './zcash.js';
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const database = new Database(process.env.DATABASE_PATH ?? './privatepay.db');
+const defaultExchangeRateNgnPerZec = Number(process.env.EXCHANGE_RATE_NGN_PER_ZEC ?? 1500);
+const defaultPlatformFeePercent = Number(process.env.PLATFORM_FEE_PERCENT ?? 2.5);
 const windowMs = 60_000;
 const maxRequestsPerWindow = 60;
 const requestHistory = new Map<string, number[]>();
@@ -22,6 +24,9 @@ function publicInvoiceFields(invoice: Record<string, unknown>) {
   return {
     id: invoice.id,
     amountNgn: Number(invoice.amountNgn),
+    freelancerReceivesNgn: Number(invoice.freelancerReceivesNgn ?? invoice.amountNgn),
+    exchangeRateNgnPerZec: Number(invoice.exchangeRateNgnPerZec ?? defaultExchangeRateNgnPerZec),
+    platformFeePercent: Number(invoice.platformFeePercent ?? defaultPlatformFeePercent),
     description: invoice.description,
     status: invoice.status,
     freelancerZcashAddress: invoice.freelancerZcashAddress,
@@ -89,6 +94,9 @@ const invoiceTableSql = `
     freelancerWalletAddress TEXT NOT NULL,
     freelancerZcashAddress TEXT NOT NULL,
     amountNgn REAL NOT NULL CHECK (amountNgn > 0),
+    freelancerReceivesNgn REAL NOT NULL CHECK (freelancerReceivesNgn >= 0),
+    exchangeRateNgnPerZec REAL NOT NULL CHECK (exchangeRateNgnPerZec > 0),
+    platformFeePercent REAL NOT NULL CHECK (platformFeePercent >= 0),
     description TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'payment_submitted', 'payment_confirmed', 'payout_processing', 'payout_completed', 'failed')),
     clientPaymentReference TEXT,
@@ -103,6 +111,15 @@ const invoiceTableSql = `
 `;
 
 database.exec(invoiceTableSql);
+
+const invoiceColumns = database.prepare('PRAGMA table_info(invoices)').all() as Array<Record<string, unknown>>;
+const existingInvoiceColumns = new Set(invoiceColumns.map((column) => String(column.name)));
+for (const columnName of ['freelancerReceivesNgn', 'exchangeRateNgnPerZec', 'platformFeePercent']) {
+  if (!existingInvoiceColumns.has(columnName)) {
+    const defaultValue = columnName === 'freelancerReceivesNgn' ? '0' : columnName === 'exchangeRateNgnPerZec' ? String(defaultExchangeRateNgnPerZec) : String(defaultPlatformFeePercent);
+    database.exec(`ALTER TABLE invoices ADD COLUMN ${columnName} REAL NOT NULL DEFAULT ${defaultValue};`);
+  }
+}
 
 app.use(
   cors({
@@ -129,9 +146,19 @@ app.post('/api/invoices', requireFreelancerAuth, (request, response) => {
   const amountNgn = Number(body.amountNgn);
   const description = typeof body.description === 'string' ? body.description.trim() : '';
   const freelancerZcashAddress = typeof body.freelancerZcashAddress === 'string' ? body.freelancerZcashAddress.trim() : '';
+  const exchangeRateNgnPerZec = Number(body.exchangeRateNgnPerZec ?? defaultExchangeRateNgnPerZec);
+  const platformFeePercent = Number(body.platformFeePercent ?? defaultPlatformFeePercent);
 
   if (!Number.isFinite(amountNgn) || amountNgn <= 0) {
     return response.status(400).json({ error: 'amountNgn must be a positive number.' });
+  }
+
+  if (!Number.isFinite(exchangeRateNgnPerZec) || exchangeRateNgnPerZec <= 0) {
+    return response.status(400).json({ error: 'exchangeRateNgnPerZec must be a positive number.' });
+  }
+
+  if (!Number.isFinite(platformFeePercent) || platformFeePercent < 0 || platformFeePercent > 100) {
+    return response.status(400).json({ error: 'platformFeePercent must be between 0 and 100.' });
   }
 
   if (!description) {
@@ -145,12 +172,16 @@ app.post('/api/invoices', requireFreelancerAuth, (request, response) => {
     });
   }
 
+  const freelancerReceivesNgn = Number((amountNgn * (1 - platformFeePercent / 100)).toFixed(2));
   const now = currentIso();
   const invoice = {
     id: randomUUID(),
     freelancerWalletAddress,
     freelancerZcashAddress,
     amountNgn,
+    freelancerReceivesNgn,
+    exchangeRateNgnPerZec,
+    platformFeePercent,
     description,
     status: 'pending' as InvoiceStatus,
     clientPaymentReference: `pay-${randomUUID().slice(0, 8)}`,
@@ -162,8 +193,8 @@ app.post('/api/invoices', requireFreelancerAuth, (request, response) => {
 
   database
     .prepare(
-      `INSERT INTO invoices (id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt)
-       VALUES (@id, @freelancerWalletAddress, @freelancerZcashAddress, @amountNgn, @description, @status, @clientPaymentReference, @clientPaymentTxid, @zcashPayoutTxid, @createdAt, @updatedAt)`
+      `INSERT INTO invoices (id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, freelancerReceivesNgn, exchangeRateNgnPerZec, platformFeePercent, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt)
+       VALUES (@id, @freelancerWalletAddress, @freelancerZcashAddress, @amountNgn, @freelancerReceivesNgn, @exchangeRateNgnPerZec, @platformFeePercent, @description, @status, @clientPaymentReference, @clientPaymentTxid, @zcashPayoutTxid, @createdAt, @updatedAt)`
     )
     .run(invoice);
 
@@ -174,7 +205,7 @@ app.get('/api/invoices', requireFreelancerAuth, (request, response) => {
   const freelancerWalletAddress = String(response.locals.freelancerWalletAddress ?? '').trim();
   const rows = database
     .prepare(
-      `SELECT id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt
+      `SELECT id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, freelancerReceivesNgn, exchangeRateNgnPerZec, platformFeePercent, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt
        FROM invoices
        WHERE freelancerWalletAddress = ?
        ORDER BY createdAt DESC`
@@ -187,7 +218,7 @@ app.get('/api/invoices', requireFreelancerAuth, (request, response) => {
 app.get('/api/invoices/:id', (request, response) => {
   const row = database
     .prepare(
-      `SELECT id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt
+      `SELECT id, freelancerWalletAddress, freelancerZcashAddress, amountNgn, freelancerReceivesNgn, exchangeRateNgnPerZec, platformFeePercent, description, status, clientPaymentReference, clientPaymentTxid, zcashPayoutTxid, createdAt, updatedAt
        FROM invoices WHERE id = ?`
     )
     .get(request.params.id) as Record<string, unknown> | undefined;

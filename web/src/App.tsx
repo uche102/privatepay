@@ -8,6 +8,9 @@ const shieldedAddressPattern = /^(?:u|z)[A-Za-z0-9]{20,}$/i;
 type Invoice = {
   id: string;
   amountNgn: number;
+  freelancerReceivesNgn: number;
+  exchangeRateNgnPerZec: number;
+  platformFeePercent: number;
   description: string;
   status: string;
   freelancerZcashAddress: string;
@@ -30,6 +33,8 @@ export default function App() {
   const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('1500');
+  const [platformFeePercent, setPlatformFeePercent] = useState('2.5');
   const [freelancerWalletAddress, setFreelancerWalletAddress] = useState('');
   const [freelancerZcashAddress, setFreelancerZcashAddress] = useState('');
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
@@ -67,6 +72,10 @@ export default function App() {
       .catch(() => setPublicInvoice(null));
   }, [invoiceId]);
 
+  const estimatedFreelancerPayout = Number(amount || 0) > 0 && Number(platformFeePercent || 0) >= 0
+    ? Number((Number(amount) * (1 - Number(platformFeePercent) / 100)).toFixed(2))
+    : 0;
+
   async function createInvoice(event: FormEvent) {
     event.preventDefault();
 
@@ -82,6 +91,19 @@ export default function App() {
 
     if (!freelancerZcashAddress.trim() || !isShieldedAddress(freelancerZcashAddress)) {
       setErrorMessage('Use a real shielded Zcash testnet receiving address.');
+      return;
+    }
+
+    const exchangeRate = Number(exchangeRateNgnPerZec);
+    const feePercent = Number(platformFeePercent);
+
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      setErrorMessage('The conversion rate must be a positive number.');
+      return;
+    }
+
+    if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 100) {
+      setErrorMessage('The platform fee must be between 0 and 100.');
       return;
     }
 
@@ -102,6 +124,8 @@ export default function App() {
         amountNgn: Number(amount),
         description: description.trim(),
         freelancerZcashAddress: freelancerZcashAddress.trim(),
+        exchangeRateNgnPerZec: exchangeRate,
+        platformFeePercent: feePercent,
       }),
     };
 
@@ -220,9 +244,20 @@ export default function App() {
                 <input type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="25000" required />
               </label>
               <label>
+                Conversion rate (NGN per ZEC)
+                <input type="number" min="1" step="0.01" value={exchangeRateNgnPerZec} onChange={(event) => setExchangeRateNgnPerZec(event.target.value)} placeholder="1500" required />
+              </label>
+              <label>
+                Platform fee (%)
+                <input type="number" min="0" max="100" step="0.1" value={platformFeePercent} onChange={(event) => setPlatformFeePercent(event.target.value)} placeholder="2.5" required />
+              </label>
+              <label>
                 Description
                 <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required />
               </label>
+              <div className="invoice-summary">
+                <p className="muted">Estimated freelancer payout: <strong>₦{estimatedFreelancerPayout.toLocaleString()}</strong></p>
+              </div>
               <button type="submit">Create payment link <span>↗</span></button>
             </form>
 
@@ -233,6 +268,8 @@ export default function App() {
                 <span className="badge">{createdInvoice.status}</span>
                 <h2>{createdInvoice.description}</h2>
                 <strong>₦{createdInvoice.amountNgn.toLocaleString()}</strong>
+                <p className="muted">Freelancer receives: ₦{createdInvoice.freelancerReceivesNgn.toLocaleString()} ({createdInvoice.platformFeePercent}% fee)</p>
+                <p className="muted">Rate: ₦{createdInvoice.exchangeRateNgnPerZec.toLocaleString()} per ZEC</p>
                 <code>{window.location.origin}/?invoice={createdInvoice.id}</code>
                 <p className="muted">Zcash receiving address: {createdInvoice.freelancerZcashAddress}</p>
               </div>
