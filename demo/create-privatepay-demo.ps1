@@ -83,7 +83,7 @@ public static class PrivatePayDemo
             {
                 Base(g, 3, "Step 2  •  Invoice details", "Set the terms", "Choose the Zcash destination and enter the NGN amount, rate and fee.");
                 Box(g, 68, 300, 520, 286, Card);
-                string[] rows = { "Zcash receiving address   [your testnet address]", "Amount   \u20A61,650", "Rate   \u20A6200 per ZEC", "Platform fee   0.00015%", "Description   Logo design" };
+                string[] rows = { "Zcash receiving address   [your testnet address]", "Amount   \u20A61,650", "Rate   \u20A61,600 per ZEC", "Platform fee   0.00015%", "Description   Logo design" };
                 for (int i=0;i<rows.Length;i++) { Box(g, 96, 326+i*47, 464, 36, Color.FromArgb(29,0,77), 8); Text(g, rows[i], 109, 334+i*47, Small, i==0?Muted:White); }
                 Box(g, 650, 344, 520, 186, Color.FromArgb(29,0,77));
                 Text(g, "ESTIMATED FREELANCER PAYOUT", 684, 380, Small, Gold);
@@ -97,7 +97,7 @@ public static class PrivatePayDemo
                 Text(g, "PAYMENT REQUEST", 382, 332, Small, Gold);
                 Text(g, "Logo design", 382, 366, Head, White);
                 Text(g, "\u20A61,650", 382, 411, Title, White);
-                Text(g, "Amount to send  8.25 ZEC", 382, 470, Body, Muted);
+                Text(g, "Amount to send  1.03125 ZEC", 382, 470, Body, Muted);
                 Box(g, 382, 520, 510, 44, Gold, 20);
                 Text(g, "COPY ZCASH ADDRESS", 523, 532, Small, Purple);
             }
@@ -109,7 +109,7 @@ public static class PrivatePayDemo
                 Box(g, 101, 384, 438, 56, Color.FromArgb(28, 43, 36), 12);
                 Text(g, "utest1... recipient address", 122, 400, Small, White);
                 Box(g, 101, 462, 438, 56, Color.FromArgb(28, 43, 36), 12);
-                Text(g, "8.25 ZEC", 122, 478, Body, White);
+                Text(g, "1.03125 ZEC", 122, 478, Body, White);
                 Box(g, 650, 352, 520, 162, Card);
                 Text(g, "The invoice page copies the address.", 686, 384, Body, White);
                 Text(g, "The client sends the payment manually.", 686, 438, Body, White);

@@ -16,7 +16,7 @@
 
 ## Scene 3 — Create an invoice (14–21s)
 
-**Visual:** Enter a Zcash testnet receiving address, ₦1,650 amount, ₦200 per ZEC rate, 0.00015% fee, and ‘Logo design’. Show the calculated freelancer payout and create the link.
+**Visual:** Enter a Zcash testnet receiving address, ₦1,650 amount, ₦1,600 per ZEC rate, 0.00015% fee, and ‘Logo design’. Show the calculated freelancer payout and create the link.
 
 **Voiceover:** “Add your shielded Zcash receiving address, invoice amount, exchange rate, fee, and a short description. PrivatePay calculates the payout and creates a shareable invoice link.”
 

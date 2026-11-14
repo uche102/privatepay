@@ -11,7 +11,7 @@ import { verifyIncomingShieldedPayment } from './zcash.js';
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const database = new Database(process.env.DATABASE_PATH ?? './privatepay.db');
-const defaultExchangeRateNgnPerZec = Number(process.env.EXCHANGE_RATE_NGN_PER_ZEC ?? 200);
+const defaultExchangeRateNgnPerZec = Number(process.env.EXCHANGE_RATE_NGN_PER_ZEC ?? 1600);
 const defaultPlatformFeePercent = Number(process.env.PLATFORM_FEE_PERCENT ?? 0.00015);
 const windowMs = 60_000;
 const maxRequestsPerWindow = 60;

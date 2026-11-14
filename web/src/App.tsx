@@ -38,7 +38,7 @@ export default function App() {
   const { isAuthenticated, wallet, openLoginModal, logout } = usePollar();
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('200');
+  const [exchangeRateNgnPerZec, setExchangeRateNgnPerZec] = useState('1600');
   const [platformFeePercent, setPlatformFeePercent] = useState('0.00015');
   const [freelancerZcashAddress, setFreelancerZcashAddress] = useState('');
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
@@ -359,7 +359,7 @@ export default function App() {
               </label>
               <label>
                 Conversion rate (NGN per ZEC)
-                <input type="number" min="1" step="0.01" value={exchangeRateNgnPerZec} onChange={(event) => setExchangeRateNgnPerZec(event.target.value)} placeholder="200" required />
+                <input type="number" min="1" step="0.01" value={exchangeRateNgnPerZec} onChange={(event) => setExchangeRateNgnPerZec(event.target.value)} placeholder="1600" required />
               </label>
               <label>
                 Platform fee (%)

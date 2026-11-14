@@ -18,7 +18,7 @@ Create `server/.env` from `server/.env.example` and set:
 ```env
 PORT=3001
 DATABASE_PATH=./privatepay.db
-EXCHANGE_RATE_NGN_PER_ZEC=200
+EXCHANGE_RATE_NGN_PER_ZEC=1600
 PLATFORM_FEE_PERCENT=0.00015
 ZCASH_MIN_CONFIRMATIONS=1
 WEB_ORIGIN=http://localhost:5173
