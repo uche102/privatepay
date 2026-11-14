@@ -1,5 +1,6 @@
 import { usePollar } from '@pollar/react';
 import { useState, type FormEvent } from 'react';
+import { createZucchiniClient, discoverZucchiniProvider } from '@zucchinifi/dapp-sdk/zcash';
 
 type Invoice = { id: string; amount: string; description: string; recipient: string; zcashAddress: string; status: 'pending' | 'paid'; };
 const demoZcashAddress = 'utest152yu6ln3kfhf204k6u6gr42307tq05gekuyvxuzy275zf37z43ruuvx58hvy6lfrcxkh4cz7njx5lfauqvndns0f82p5axtd2epau9dkue5fwx94nx0emyyky3eelztlzc3e2f0gfzhgggxrp2j0xyuu2ffpj6ep6wz9f0hzrgsxkezt';
@@ -18,6 +19,29 @@ export default function App() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [created, setCreated] = useState<Invoice | null>(null);
+  const [paymentRequest, setPaymentRequest] = useState('');
+  const [walletError, setWalletError] = useState('');
+
+  async function requestZcashPayment(invoice: Invoice) {
+    const uri = `zcash:${invoice.zcashAddress ?? demoZcashAddress}?amount=0.001&memo=${encodeURIComponent(`PrivatePay invoice ${invoice.id}`)}`;
+    setPaymentRequest(uri);
+    setWalletError('');
+    const provider = discoverZucchiniProvider();
+    if (provider) {
+      try {
+        const wallet = createZucchiniClient(provider);
+        await wallet.connect({ permissions: ['send_transaction'] });
+        const result = await wallet.requestPayment(uri);
+        setPaymentRequest(`Submitted: ${result.txid}`);
+        return;
+      } catch (error) {
+        setWalletError(error instanceof Error ? error.message : 'Zucchini payment was cancelled.');
+        return;
+      }
+    }
+    try { await navigator.clipboard.writeText(uri); } catch { /* Clipboard permission is optional. */ }
+    setWalletError('Zucchini Wallet was not detected. The payment request was copied instead.');
+  }
 
   function createInvoice(event: FormEvent) {
     event.preventDefault();
@@ -47,7 +71,9 @@ export default function App() {
             <strong className="amount">₦{Number(publicInvoice.amount).toLocaleString()}</strong>
             <p className="muted">Pollar settlement wallet</p>
             <code>{publicInvoice.recipient}</code>
-            {publicInvoice.status === 'pending' ? <button onClick={() => markPaid(publicInvoice)}>Pay with Pollar testnet <span>↗</span></button> : <><p className="paid-message">✓ Pollar payment confirmed</p><div className="payout"><span className="badge">ZCASH PAYOUT PENDING</span><p>Send <strong>0.001 ZEC</strong> on Zcash testnet to:</p><code>{publicInvoice.zcashAddress ?? demoZcashAddress}</code><p className="muted">The sender approves this payout in your Zcash wallet.</p></div></>}
+            {publicInvoice.status === 'pending' ? <button onClick={() => void requestZcashPayment(publicInvoice)}>Pay with Zucchini <span>↗</span></button> : <><p className="paid-message">✓ Payment submitted</p><div className="payout"><span className="badge">ZCASH TESTNET PAYOUT</span><p>Send <strong>0.001 ZEC</strong> on Zcash testnet to:</p><code>{publicInvoice.zcashAddress ?? demoZcashAddress}</code><p className="muted">Approve the request in Zucchini Wallet, then wait for confirmation.</p></div></>}
+            {paymentRequest && <p className="request-note">{paymentRequest.startsWith('Submitted:') ? paymentRequest : 'Payment request copied. If the wallet did not open, paste it into Zucchini Wallet.'}</p>}
+            {walletError && <p className="wallet-error">{walletError}</p>}
           </> : <><h1>Invoice not found</h1><p className="muted">This invoice link may have expired or is unavailable in this browser.</p></>}
         </section>
       </main>
@@ -74,7 +100,7 @@ export default function App() {
               <label>What are you charging for?<input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Logo design" required /></label>
               <button type="submit">Create payment link <span>↗</span></button>
             </form>
-            {created && <div className="invoice"><span className="badge">{created.status === 'paid' ? 'PAID' : 'PENDING'}</span><h2>{created.description}</h2><strong>₦{Number(created.amount).toLocaleString()}</strong><code>{window.location.origin}/?invoice={created.id}</code>{created.status === 'pending' && <button onClick={() => markPaid(created)}>Simulate testnet payment</button>}</div>}
+            {created && <div className="invoice"><span className="badge">{created.status === 'paid' ? 'PAID' : 'PENDING'}</span><h2>{created.description}</h2><strong>₦{Number(created.amount).toLocaleString()}</strong><code>{window.location.origin}/?invoice={created.id}</code>{created.status === 'pending' && <button onClick={() => void requestZcashPayment(created)}>Open Zucchini payment</button>}</div>}
             {invoices.length > 0 && <div className="history"><h2>Recent invoices</h2>{invoices.map((invoice) => <div className="row" key={invoice.id}><span>{invoice.description}<small>₦{Number(invoice.amount).toLocaleString()}</small></span><span className={invoice.status}>{invoice.status}</span></div>)}</div>}
           </div>
         ) : (
